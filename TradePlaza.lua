@@ -19,7 +19,7 @@ local function getPureName(item)
 end
 
 -- KONFIGURASI JUALAN
-local HARGA = 15 
+local HARGA = 21 
 local JEDA_ANTAR_ITEM = 10 -- Jeda tiap naruh 1 barang (biar gak spam)
 local JEDA_SCAN_ULANG = 30 -- Jeda nunggu setelah satu tas beres di-scan
 

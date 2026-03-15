@@ -3,6 +3,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 -- Setup Data & Variabel
 _G.WebhookURL = "https://webhook.lewisakura.moe/api/webhooks/1482698230113239247/k7JIguRr2Xo7Ktu4MVK0xRQP7iski23HgP0LbLaIWDmfCj0NhOZLDjGJA7FxTj4DT8aD"
 _G.LoggerEnabled = false
+_G.HargaJual = 21 -- Harga default awal
 local Player = game:GetService("Players").LocalPlayer
 local TokenPath = Player:WaitForChild("leaderstats"):WaitForChild("Trade Tokens")
 
@@ -84,6 +85,20 @@ MainTab:CreateInput({
    Callback = function(Text) _G.WebhookURL = Text end,
 })
 
+-- KOLOM INPUT HARGA BARU
+MainTab:CreateInput({
+   Name = "Set Harga Jual",
+   PlaceholderText = "Default: 21",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+       local num = tonumber(Text)
+       if num then
+           _G.HargaJual = num
+           Rayfield:Notify({Title = "Harga Diupdate!", Content = "Sekarang barang akan dijual seharga: " .. num, Duration = 3})
+       end
+   end,
+})
+
 MainTab:CreateToggle({
    Name = "Enable Discord Logger",
    CurrentValue = false,
@@ -96,7 +111,6 @@ MainTab:CreateButton({
        Rayfield:Notify({Title = "Restock Active!", Content = "Sistem otomatis mulai memajang barang.", Duration = 5})
        
        task.spawn(function()
-           local HARGA = 21 
            local JEDA_ANTAR_ITEM = 10
            local JEDA_SCAN_ULANG = 30
            
@@ -110,10 +124,11 @@ MainTab:CreateButton({
                        
                        if itemUUID and string.match(itemUUID, "%-") then
                            local success = pcall(function()
-                               return RemoteRestock:InvokeServer(itemUUID, HARGA)
+                               -- Menggunakan _G.HargaJual yang diinput di UI
+                               return RemoteRestock:InvokeServer(itemUUID, _G.HargaJual)
                            end)
                            if success then
-                               print("✅ Berhasil List: " .. cleanName)
+                               print("✅ Berhasil List: " .. cleanName .. " @ " .. _G.HargaJual)
                                task.wait(JEDA_ANTAR_ITEM)
                            else
                                warn("❌ Skip/Penuh: " .. cleanName)

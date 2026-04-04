@@ -102,8 +102,8 @@ task.spawn(function()
     -- ── 1. Rendering Settings ─────────────────────
     local Settings = settings()
     pcall(function()
-        Settings.Rendering.QualityLevel       = Enum.QualityLevel.Level01
-        Settings.Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.DistanceBased
+        Settings.Rendering.QualityLevel       = Enum.QualityLevel.Level21
+        Settings.Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
         Settings.Rendering.EagerBulkExecution  = true
     end)
 

@@ -1143,10 +1143,18 @@ end)
 -- Helpers
 local function makeLabel(text)
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,0,0,18); l.BackgroundTransparency = 1
-    l.Text = text:upper(); l.TextColor3 = Color3.fromRGB(100, 110, 130)
-    l.TextSize = 10; l.Font = Enum.Font.GothamBold; l.TextLetterSpacing = 1
-    l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = scrollBody
+    l.Size = UDim2.new(1,0,0,18)
+    l.BackgroundTransparency = 1
+    l.Text = text:upper()
+    l.TextColor3 = Color3.fromRGB(100, 110, 130)
+    l.TextSize = 10
+    l.Font = Enum.Font.GothamBold
+    
+    -- Baris ini dihapus karena tidak ada di Roblox
+    -- l.TextLetterSpacing = 1
+    
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = scrollBody
     return l
 end
 

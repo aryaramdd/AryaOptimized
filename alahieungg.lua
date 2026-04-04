@@ -91,20 +91,845 @@ local function getAllTables()
 end
 
 -- ================================================
--- GUI
+-- ANTI LAG & FPS BOOST  (jalan 1x saat startup)
 -- ================================================
+task.spawn(function()
+    local RS  = game:GetService("RunService")
+    local Lighting = game:GetService("Lighting")
+    local ws   = game:GetService("Workspace")
+    local StarterGui = game:GetService("StarterGui")
+
+    -- ── 1. Rendering Settings ─────────────────────
+    local Settings = settings()
+    pcall(function()
+        Settings.Rendering.QualityLevel       = Enum.QualityLevel.Level01
+        Settings.Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Disabled
+        Settings.Rendering.EagerBulkExecution  = true
+    end)
+
+    -- ── 2. Lighting ───────────────────────────────
+    pcall(function()
+        Lighting.GlobalShadows     = false
+        Lighting.FogEnd            = 10e8
+        Lighting.FogStart          = 10e8
+        -- matikan teknologi lighting berat
+        for _, effect in ipairs(Lighting:GetChildren()) do
+            if effect:IsA("BlurEffect")
+                or effect:IsA("ColorCorrectionEffect")
+                or effect:IsA("SunRaysEffect")
+                or effect:IsA("BloomEffect")
+                or effect:IsA("DepthOfFieldEffect") then
+                effect.Enabled = false
+            end
+        end
+    end)
+
+    -- ── 3. Workspace ──────────────────────────────
+    pcall(function()
+        ws.StreamingEnabled     = false   -- matikan streaming jika bisa
+        ws.Terrain.WaterWaveSize   = 0
+        ws.Terrain.WaterWaveSpeed  = 0
+        ws.Terrain.WaterReflectance = 0
+        ws.Terrain.WaterTransparency = 1
+    end)
+
+    -- ── 4. Hapus particle & efek berat di workspace ─
+    pcall(function()
+        for _, obj in ipairs(ws:GetDescendants()) do
+            if obj:IsA("ParticleEmitter")
+                or obj:IsA("Trail")
+                or obj:IsA("SelectionBox")
+                or obj:IsA("BoxHandleAdornment") then
+                pcall(function() obj.Enabled = false end)
+                pcall(function() obj.Rate    = 0     end)
+            end
+            -- matikan PointLight & SpotLight berat
+            if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+                pcall(function() obj.Enabled = false end)
+            end
+        end
+    end)
+
+    -- ── 5. Paksa Garbage Collection ───────────────
+    pcall(function()
+        local gc = gcinfo
+        if gc then
+            for _ = 1, 3 do
+                collectgarbage("collect")
+                task.wait()
+            end
+        end
+    end)
+
+    -- ── 6. Matikan animasi karakter player lain ───
+    pcall(function()
+        local Players = game:GetService("Players")
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                for _, obj in ipairs(p.Character:GetDescendants()) do
+                    if obj:IsA("Animator") then
+                        pcall(function() obj:GetPlayingAnimationTracks() end)
+                    end
+                    if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                        pcall(function() obj.Enabled = false; obj.Rate = 0 end)
+                    end
+                end
+            end
+        end
+        -- Lakukan juga untuk player yang join setelah ini
+        Players.PlayerAdded:Connect(function(p2)
+            if p2 == player then return end
+            p2.CharacterAdded:Connect(function(char)
+                task.wait(1)
+                for _, obj in ipairs(char:GetDescendants()) do
+                    if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                        pcall(function() obj.Enabled = false; obj.Rate = 0 end)
+                    end
+                end
+            end)
+        end)
+    end)
+
+
+    -- ── Hapus UI elements yang tidak diperlukan ────
+    task.wait(2)  -- tunggu PlayerGui fully loaded
+    local togglesPath = playerGui:FindFirstChild("Menus")
+        and playerGui.Menus:FindFirstChild("Toggles")
+    if togglesPath then
+        local toRemove = {
+            "Invite", "Rebirth", "Shop", "VIP",
+            "Trade", "IndexLong", "Index"
+        }
+        for _, name in ipairs(toRemove) do
+            local obj = togglesPath:FindFirstChild(name)
+            if obj then
+                obj:Destroy()
+            end
+        end
+    end
+
+    -- ── Hapus workspace objects berat ─────────────
+    local ws = game:GetService("Workspace")
+    local go  = ws:FindFirstChild("GameObjects")
+
+    -- Hapus langsung
+    local directRemove = {
+        go and go:FindFirstChild("Booths"),
+        go and go:FindFirstChild("PlaceSpecific")
+            and go.PlaceSpecific:FindFirstChild("trade_plaza")
+            and go.PlaceSpecific.trade_plaza:FindFirstChild("Leaderboards"),
+        go and go:FindFirstChild("PlaceSpecific")
+            and go.PlaceSpecific:FindFirstChild("trade_plaza")
+            and go.PlaceSpecific.trade_plaza:FindFirstChild("SpawnMachines"),
+        go and go:FindFirstChild("PlaceSpecific")
+            and go.PlaceSpecific:FindFirstChild("trade_plaza")
+            and go.PlaceSpecific.trade_plaza:FindFirstChild("EventTimers"),
+        ws:FindFirstChild("LimitedShop"),
+    }
+    for _, obj in ipairs(directRemove) do
+        if obj then
+            local n = obj.Name
+            pcall(function() obj:Destroy() end)
+        end
+    end
+
+    -- Hapus isi TradePlazaMap berdasarkan nama
+    local plazaMap = go
+        and go:FindFirstChild("PlaceSpecific")
+        and go.PlaceSpecific:FindFirstChild("trade_plaza")
+        and go.PlaceSpecific.trade_plaza:FindFirstChild("TradePlazaMap")
+
+    if plazaMap then
+        local mapRemove = {
+            "Barrel","Bush","Bench","Cloud","Crate","Crown",
+            "Fence","Flower","Grass","Island","Lantern","Model",
+            "Obby","ObbyCopies","Patch","PlazaPortal","PoolTable",
+            "Rock","Sea","Tree","Tree1","TsunamiWaves","Walls",
+            "light pole",
+        }
+        local mapSet = {}
+        for _, n in ipairs(mapRemove) do mapSet[n] = true end
+
+        for _, child in ipairs(plazaMap:GetChildren()) do
+            if mapSet[child.Name] then
+                pcall(function() child:Destroy() end)
+            end
+        end
+    end
+
+
+    -- ── Spawn Leaderboard Board di posisi InfoHolder ──
+    task.wait(1)
+    task.spawn(function()
+        local HS  = game:GetService("HttpService")
+        local ws2 = game:GetService("Workspace")
+        local FB  = "https://chat-user-papi-dimz-default-rtdb.asia-southeast1.firebasedatabase.app"
+
+        local tradePlaza = ws2:FindFirstChild("GameObjects")
+            and ws2.GameObjects:FindFirstChild("PlaceSpecific")
+            and ws2.GameObjects.PlaceSpecific:FindFirstChild("trade_plaza")
+
+        local infoHolder = tradePlaza and tradePlaza:FindFirstChild("InfoHolder")
+        local boardCF    = CFrame.new(0, 10, 0)  -- fallback
+
+        if infoHolder then
+            local ok1, cf1 = pcall(function() return infoHolder:GetPivot() end)
+            if ok1 and cf1 then
+                boardCF = cf1
+            else
+                local ok2, cf2 = pcall(function()
+                    local pp = infoHolder.PrimaryPart
+                    return pp and pp.CFrame or infoHolder.CFrame
+                end)
+                if ok2 and cf2 then
+                    boardCF = cf2
+                else
+                    for _, child in ipairs(infoHolder:GetDescendants()) do
+                        if child:IsA("BasePart") then
+                            boardCF = child.CFrame
+                            break
+                        end
+                    end
+                end
+            end
+            pcall(function() infoHolder:Destroy() end)
+        else
+        end
+
+        local neonC      = Color3.fromRGB(0, 230, 255)
+        local neonPink   = Color3.fromRGB(255, 40, 180)
+        local neonYellow = Color3.fromRGB(255, 220, 0)
+        local boardColor = Color3.fromRGB(8, 8, 22)
+        local boardTransp = 0.1
+        local thick      = 0.15
+        local PPU        = 50
+
+        local function maskUsername(name)
+            if #name <= 5 then return name end
+            return name:sub(1, 5) .. "***"
+        end
+
+        local COLS    = 5
+        local CARD_W  = 160
+        local GAP     = 10
+        local HDR_H   = 80
+        local PAD     = 12
+        local boardPxW  = COLS * (CARD_W + GAP) + GAP + PAD * 2
+        local boardWstd = boardPxW / PPU
+        local boardH    = 18
+        local boardD    = 0.5
+
+        local boardParts   = {}
+        local sidePanelGui = nil
+
+        local function mkBorder(size, cf2, col)
+            local b = Instance.new("Part")
+            b.Size = size; b.CFrame = cf2; b.Anchored = true; b.CanCollide = false
+            b.Material = Enum.Material.Neon; b.Color = col; b.CastShadow = false
+            b.Name = "LBBoardPart"; b.Parent = ws2
+            table.insert(boardParts, b)
+            return b
+        end
+
+        local function showSidePanel(username, data)
+            if sidePanelGui then sidePanelGui:Destroy() end
+            local spPart
+            for _, p in ipairs(boardParts) do
+                if p.Name == "LBSidePanel" then spPart = p; break end
+            end
+            if not spPart then return end
+
+            local spGui = Instance.new("SurfaceGui")
+            spGui.Name = "LBSidePanelGui"
+            spGui.Face = Enum.NormalId.Front
+            spGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+            spGui.PixelsPerStud = 40
+            spGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+            spGui.Parent = spPart
+            sidePanelGui = spGui
+
+            local root = Instance.new("Frame", spGui)
+            root.Size = UDim2.new(1,0,1,0)
+            root.BackgroundTransparency = 1; root.BorderSizePixel = 0
+
+            local title = Instance.new("TextLabel", root)
+            title.Size = UDim2.new(1,-10,0,55); title.Position = UDim2.new(0,5,0,8)
+            title.BackgroundTransparency = 1; title.Text = maskUsername(username)
+            title.TextColor3 = neonC; title.TextSize = 22
+            title.Font = Enum.Font.GothamBold
+            title.TextXAlignment = Enum.TextXAlignment.Center
+            title.TextTruncate = Enum.TextTruncate.AtEnd; title.ZIndex = 3
+
+            local stats = Instance.new("TextLabel", root)
+            stats.Size = UDim2.new(1,-10,0,40); stats.Position = UDim2.new(0,5,0,63)
+            stats.BackgroundTransparency = 1
+            stats.Text = string.format("W:%d  L:%d\n🏅%d  💀%d",
+                data.wins or 0, data.loses or 0,
+                data.tokensWin or 0, data.tokensLose or 0)
+            stats.TextColor3 = Color3.fromRGB(220,235,255)
+            stats.TextSize = 14; stats.Font = Enum.Font.GothamBold
+            stats.TextXAlignment = Enum.TextXAlignment.Center; stats.ZIndex = 3
+
+            local div = Instance.new("Frame", root)
+            div.Size = UDim2.new(0.9,0,0,2); div.Position = UDim2.new(0.05,0,0,108)
+            div.BackgroundColor3 = neonC; div.BorderSizePixel = 0; div.ZIndex = 3
+
+            local winLbl = Instance.new("TextLabel", root)
+            winLbl.Size = UDim2.new(1,-10,0,26); winLbl.Position = UDim2.new(0,5,0,116)
+            winLbl.BackgroundTransparency = 1
+            winLbl.Text = "🏆 Win Items (" .. tostring(#(data.itemsWin or {})) .. ")"
+            winLbl.TextColor3 = Color3.fromRGB(80,255,120)
+            winLbl.TextSize = 14; winLbl.Font = Enum.Font.GothamBold
+            winLbl.TextXAlignment = Enum.TextXAlignment.Left; winLbl.ZIndex = 3
+
+            local winScroll = Instance.new("ScrollingFrame", root)
+            winScroll.Size = UDim2.new(1,-10,0,120); winScroll.Position = UDim2.new(0,5,0,144)
+            winScroll.BackgroundColor3 = Color3.fromRGB(5,5,18)
+            winScroll.BackgroundTransparency = 0.2; winScroll.BorderSizePixel = 0
+            winScroll.ScrollBarThickness = 4; winScroll.ScrollBarImageColor3 = neonC
+            winScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            winScroll.CanvasSize = UDim2.new(0,0,0,0); winScroll.ZIndex = 3
+            Instance.new("UIListLayout", winScroll).Padding = UDim.new(0,2)
+            Instance.new("UICorner", winScroll).CornerRadius = UDim.new(0,5)
+
+            for _, item in ipairs(data.itemsWin or {}) do
+                local row = Instance.new("TextLabel", winScroll)
+                row.Size = UDim2.new(1,0,0,22); row.BackgroundTransparency = 1
+                row.Text = "  • " .. tostring(item)
+                row.TextColor3 = Color3.fromRGB(220,255,220)
+                row.TextSize = 13; row.Font = Enum.Font.GothamBold
+                row.TextXAlignment = Enum.TextXAlignment.Left
+                row.TextTruncate = Enum.TextTruncate.AtEnd; row.ZIndex = 4
+            end
+
+            local loseLbl = Instance.new("TextLabel", root)
+            loseLbl.Size = UDim2.new(1,-10,0,26); loseLbl.Position = UDim2.new(0,5,0,272)
+            loseLbl.BackgroundTransparency = 1
+            loseLbl.Text = "💀 Lose Items (" .. tostring(#(data.itemsLose or {})) .. ")"
+            loseLbl.TextColor3 = Color3.fromRGB(255,120,120)
+            loseLbl.TextSize = 14; loseLbl.Font = Enum.Font.GothamBold
+            loseLbl.TextXAlignment = Enum.TextXAlignment.Left; loseLbl.ZIndex = 3
+
+            local loseScroll = Instance.new("ScrollingFrame", root)
+            loseScroll.Size = UDim2.new(1,-10,0,120); loseScroll.Position = UDim2.new(0,5,0,300)
+            loseScroll.BackgroundColor3 = Color3.fromRGB(18,5,5)
+            loseScroll.BackgroundTransparency = 0.2; loseScroll.BorderSizePixel = 0
+            loseScroll.ScrollBarThickness = 4; loseScroll.ScrollBarImageColor3 = neonPink
+            loseScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            loseScroll.CanvasSize = UDim2.new(0,0,0,0); loseScroll.ZIndex = 3
+            Instance.new("UIListLayout", loseScroll).Padding = UDim.new(0,2)
+            Instance.new("UICorner", loseScroll).CornerRadius = UDim.new(0,5)
+
+            for _, item in ipairs(data.itemsLose or {}) do
+                local row = Instance.new("TextLabel", loseScroll)
+                row.Size = UDim2.new(1,0,0,22); row.BackgroundTransparency = 1
+                row.Text = "  • " .. tostring(item)
+                row.TextColor3 = Color3.fromRGB(255,210,210)
+                row.TextSize = 13; row.Font = Enum.Font.GothamBold
+                row.TextXAlignment = Enum.TextXAlignment.Left
+                row.TextTruncate = Enum.TextTruncate.AtEnd; row.ZIndex = 4
+            end
+        end
+
+        local function buildBoard()
+            for _, p in ipairs(boardParts) do pcall(function() p:Destroy() end) end
+            boardParts = {}
+            if sidePanelGui then sidePanelGui:Destroy(); sidePanelGui = nil end
+
+            local lbData = {}
+            pcall(function()
+                local res = game:HttpGet(FB .. "/plaza_leaderboard.json?shallow=false")
+                local decoded = HS:JSONDecode(res)
+                if type(decoded) == "table" then
+                    for uname, udata in pairs(decoded) do
+                        if type(udata) == "table" then
+                            udata.username = udata.username or uname
+                            table.insert(lbData, udata)
+                        end
+                    end
+                end
+            end)
+
+            table.sort(lbData, function(a, b)
+                return (a.wins or 0) > (b.wins or 0)
+            end)
+
+            local part = Instance.new("Part")
+            part.Name = "LBBoardPart"; part.Size = Vector3.new(boardWstd, boardH, boardD)
+            part.CFrame = boardCF; part.Anchored = true; part.CanCollide = false
+            part.Material = Enum.Material.SmoothPlastic; part.Color = boardColor
+            part.Transparency = boardTransp; part.CastShadow = false; part.Parent = ws2
+            table.insert(boardParts, part)
+
+            mkBorder(Vector3.new(boardWstd+thick*2, thick*2, boardD+0.05),
+                boardCF * CFrame.new(0, boardH/2+thick, 0), neonC)
+            mkBorder(Vector3.new(boardWstd+thick*2, thick, boardD+0.05),
+                boardCF * CFrame.new(0, -boardH/2-thick/2, 0), neonPink)
+            mkBorder(Vector3.new(thick, boardH+thick*4, boardD+0.05),
+                boardCF * CFrame.new(-boardWstd/2-thick/2, 0, 0), neonC)
+            mkBorder(Vector3.new(thick, boardH+thick*4, boardD+0.05),
+                boardCF * CFrame.new(boardWstd/2+thick/2, 0, 0), neonC)
+
+            local pillarW, pillarH = 1.2, boardH + 2
+            local pillarOff = boardWstd/2 + pillarW/2 + 0.1
+            for _, side in ipairs({-1, 1}) do
+                local pil = mkBorder(Vector3.new(pillarW, pillarH, 0.8),
+                    boardCF * CFrame.new(side * pillarOff, 0, 0), Color3.fromRGB(15,15,35))
+                pil.Material = Enum.Material.SmoothPlastic; pil.Transparency = 0.1
+                for k = 1, 4 do
+                    local yOff = -pillarH/2 + (k/5) * pillarH
+                    mkBorder(Vector3.new(pillarW+0.05, 0.12, 0.85),
+                        boardCF * CFrame.new(side * pillarOff, yOff, 0),
+                        k%2==0 and neonC or neonPink)
+                end
+            end
+
+            local archW = boardWstd + pillarW*2 + 0.2
+            local archH = 2.5
+            local archY = boardH/2 + archH/2 + thick*2
+            local arch = mkBorder(Vector3.new(archW, archH, boardD),
+                boardCF * CFrame.new(0, archY, 0), Color3.fromRGB(10,10,30))
+            arch.Material = Enum.Material.SmoothPlastic; arch.Transparency = 0.1
+            mkBorder(Vector3.new(archW, thick*2, boardD+0.05),
+                boardCF * CFrame.new(0, archY + archH/2, 0), neonYellow)
+            mkBorder(Vector3.new(archW, thick, boardD+0.05),
+                boardCF * CFrame.new(0, archY - archH/2, 0), neonC)
+
+            local archGui = Instance.new("SurfaceGui"); archGui.Name = "LBArchGui"
+            archGui.Face = Enum.NormalId.Front
+            archGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+            archGui.PixelsPerStud = PPU; archGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+            archGui.Parent = arch
+            local archBg = Instance.new("Frame", archGui)
+            archBg.Size = UDim2.new(1,0,1,0); archBg.BackgroundColor3 = Color3.fromRGB(0,5,20)
+            archBg.BackgroundTransparency = 0.2; archBg.BorderSizePixel = 0
+            local archTitle = Instance.new("TextLabel", archBg)
+            archTitle.Size = UDim2.new(1,0,1,0); archTitle.BackgroundTransparency = 1
+            archTitle.Text = "⚡  LEADERBOARD PAPI DIMZ  ⚡"
+            archTitle.TextColor3 = neonC; archTitle.TextSize = 18
+            archTitle.Font = Enum.Font.GothamBold
+            archTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+            local cSz = Vector3.new(0.5,0.5,boardD+0.1)
+            mkBorder(cSz, boardCF*CFrame.new(-boardWstd/2, boardH/2, 0), neonYellow)
+            mkBorder(cSz, boardCF*CFrame.new( boardWstd/2, boardH/2, 0), neonYellow)
+            mkBorder(cSz, boardCF*CFrame.new(-boardWstd/2,-boardH/2, 0), neonPink)
+            mkBorder(cSz, boardCF*CFrame.new( boardWstd/2,-boardH/2, 0), neonPink)
+
+            -- ── SERVER LIST BOARD (sebelah kiri) ─────
+            local slW, slH = 10, boardH - 1
+            local slOff = boardWstd/2 + pillarW + slW/2 + 0.5
+            local slPart = Instance.new("Part")
+            slPart.Name = "LBServerPanel"
+            slPart.Size = Vector3.new(slW, slH, boardD)
+            slPart.CFrame = boardCF * CFrame.new(-slOff, (boardH-slH)/2 - 1, 0)
+            slPart.Anchored = true; slPart.CanCollide = false
+            slPart.Material = Enum.Material.SmoothPlastic; slPart.Color = boardColor
+            slPart.Transparency = boardTransp; slPart.CastShadow = false
+            slPart.Parent = ws2
+            table.insert(boardParts, slPart)
+            local sl2 = slPart.CFrame
+            mkBorder(Vector3.new(slW+thick*2,thick*2,boardD+0.05), sl2*CFrame.new(0, slH/2,0),  neonYellow)
+            mkBorder(Vector3.new(slW+thick*2,thick,  boardD+0.05), sl2*CFrame.new(0,-slH/2,0),  neonPink)
+            mkBorder(Vector3.new(thick,slH,          boardD+0.05), sl2*CFrame.new(-slW/2,0,0),  neonC)
+            mkBorder(Vector3.new(thick,slH,          boardD+0.05), sl2*CFrame.new( slW/2,0,0),  neonC)
+
+            local slGui = Instance.new("SurfaceGui"); slGui.Name = "LBServerGui"
+            slGui.Face = Enum.NormalId.Front
+            slGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+            slGui.PixelsPerStud = 40; slGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+            slGui.Active = true; slGui.Parent = slPart
+
+            local slRoot = Instance.new("Frame", slGui)
+            slRoot.Size = UDim2.new(1,0,1,0); slRoot.BackgroundTransparency = 1; slRoot.BorderSizePixel = 0
+
+            local slHdr = Instance.new("Frame", slRoot)
+            slHdr.Size = UDim2.new(1,0,0,50); slHdr.BackgroundColor3 = Color3.fromRGB(5,5,20)
+            slHdr.BorderSizePixel = 0; slHdr.ZIndex = 5
+            Instance.new("UICorner", slHdr).CornerRadius = UDim.new(0,6)
+            local slHdrGrad = Instance.new("UIGradient", slHdr)
+            slHdrGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,30,60)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,10,40)),
+                ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,30,60)),
+            }); slHdrGrad.Rotation = 90
+            local slHdrLine = Instance.new("Frame", slHdr)
+            slHdrLine.Size = UDim2.new(1,0,0,3); slHdrLine.Position = UDim2.new(0,0,1,-3)
+            slHdrLine.BackgroundColor3 = neonC; slHdrLine.BorderSizePixel = 0; slHdrLine.ZIndex = 7
+            local slHdrTitle = Instance.new("TextLabel", slHdr)
+            slHdrTitle.Size = UDim2.new(1,0,0,30); slHdrTitle.Position = UDim2.new(0,0,0,4)
+            slHdrTitle.BackgroundTransparency = 1
+            slHdrTitle.Text = "🌐  SERVER LIST"
+            slHdrTitle.TextColor3 = neonC; slHdrTitle.TextSize = 16
+            slHdrTitle.Font = Enum.Font.GothamBold
+            slHdrTitle.TextXAlignment = Enum.TextXAlignment.Center; slHdrTitle.ZIndex = 6
+
+            local slStatus = Instance.new("TextLabel", slRoot)
+            slStatus.Size = UDim2.new(1,-10,0,22); slStatus.Position = UDim2.new(0,5,0,52)
+            slStatus.BackgroundTransparency = 1
+            slStatus.Text = "⏳ Memuat server..."
+            slStatus.TextColor3 = Color3.fromRGB(120,140,180)
+            slStatus.TextSize = 11; slStatus.Font = Enum.Font.GothamBold
+            slStatus.TextXAlignment = Enum.TextXAlignment.Center; slStatus.ZIndex = 4
+
+            local slScroll = Instance.new("ScrollingFrame", slRoot)
+            slScroll.Size = UDim2.new(1,-6,1,-80); slScroll.Position = UDim2.new(0,3,0,76)
+            slScroll.BackgroundTransparency = 1; slScroll.BorderSizePixel = 0
+            slScroll.ScrollBarThickness = 4; slScroll.ScrollBarImageColor3 = neonC
+            slScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            slScroll.CanvasSize = UDim2.new(0,0,0,0); slScroll.ZIndex = 3
+            local slList = Instance.new("UIListLayout", slScroll)
+            slList.Padding = UDim.new(0,4); slList.SortOrder = Enum.SortOrder.LayoutOrder
+            local slPad = Instance.new("UIPadding", slScroll)
+            slPad.PaddingLeft = UDim.new(0,4); slPad.PaddingRight = UDim.new(0,4)
+            slPad.PaddingTop = UDim.new(0,4); slPad.PaddingBottom = UDim.new(0,4)
+
+            local slRefBtn = Instance.new("TextButton", slRoot)
+            slRefBtn.Size = UDim2.new(0.85,0,0,24); slRefBtn.Position = UDim2.new(0.075,0,1,-28)
+            slRefBtn.BackgroundColor3 = Color3.fromRGB(0,30,60); slRefBtn.BorderSizePixel = 0
+            slRefBtn.Text = "↻  Refresh"; slRefBtn.TextColor3 = neonC
+            slRefBtn.TextSize = 12; slRefBtn.Font = Enum.Font.GothamBold; slRefBtn.ZIndex = 5
+            Instance.new("UICorner", slRefBtn).CornerRadius = UDim.new(0,6)
+            Instance.new("UIStroke", slRefBtn).Color = neonC
+
+            local slFetching = false
+            local function buildServerCards(servers)
+                for _, c in ipairs(slScroll:GetChildren()) do
+                    if c:IsA("Frame") then c:Destroy() end
+                end
+
+                if not servers or #servers == 0 then
+                    local empty = Instance.new("TextLabel", slScroll)
+                    empty.Size = UDim2.new(1,0,0,50); empty.BackgroundTransparency = 1
+                    empty.Text = "😶 Tidak ada\nserver aktif"
+                    empty.TextColor3 = Color3.fromRGB(80,90,120)
+                    empty.TextSize = 12; empty.Font = Enum.Font.Gotham
+                    empty.TextWrapped = true; empty.TextXAlignment = Enum.TextXAlignment.Center
+                    return
+                end
+
+                table.sort(servers, function(a,b)
+                    return (a.playing or 0) > (b.playing or 0)
+                end)
+
+                for i, srv in ipairs(servers) do
+                    if i > 20 then break end
+                    local playing  = srv.playing    or 0
+                    local maxPl    = srv.maxPlayers or 0
+                    local ping     = math.floor(srv.ping or 0)
+                    local fps      = math.floor(srv.fps  or 0)
+                    local isFull   = maxPl > 0 and playing >= maxPl
+                    local isMine   = srv.id == game.JobId
+
+                    local card = Instance.new("Frame", slScroll)
+                    card.Size = UDim2.new(1,0,0,isMine and 72 or 65)
+                    card.BackgroundColor3 = isMine and Color3.fromRGB(0,30,50) or Color3.fromRGB(8,10,25)
+                    card.BackgroundTransparency = 0.1; card.BorderSizePixel = 0
+                    card.LayoutOrder = i; card.ZIndex = 4
+                    Instance.new("UICorner", card).CornerRadius = UDim.new(0,6)
+                    local cStroke = Instance.new("UIStroke", card)
+                    cStroke.Color = isMine and neonYellow or (isFull and neonPink or neonC)
+                    cStroke.Thickness = isMine and 1.5 or 0.8
+
+                    local topRow = Instance.new("Frame", card)
+                    topRow.Size = UDim2.new(1,-8,0,20); topRow.Position = UDim2.new(0,4,0,4)
+                    topRow.BackgroundTransparency = 1; topRow.ZIndex = 5
+
+                    local numLbl = Instance.new("TextLabel", topRow)
+                    numLbl.Size = UDim2.new(0.5,0,1,0); numLbl.BackgroundTransparency = 1
+                    numLbl.Text = (isMine and "★ " or "#") .. tostring(i)
+                    numLbl.TextColor3 = isMine and neonYellow or neonC
+                    numLbl.TextSize = 13; numLbl.Font = Enum.Font.GothamBold
+                    numLbl.TextXAlignment = Enum.TextXAlignment.Left; numLbl.ZIndex = 5
+
+                    local plrLbl = Instance.new("TextLabel", topRow)
+                    plrLbl.Size = UDim2.new(0.5,0,1,0); plrLbl.Position = UDim2.new(0.5,0,0,0)
+                    plrLbl.BackgroundTransparency = 1
+                    plrLbl.Text = string.format("👥 %d/%d", playing, maxPl)
+                    plrLbl.TextColor3 = isFull and neonPink or Color3.fromRGB(180,220,180)
+                    plrLbl.TextSize = 12; plrLbl.Font = Enum.Font.GothamBold
+                    plrLbl.TextXAlignment = Enum.TextXAlignment.Right; plrLbl.ZIndex = 5
+
+                    local statsRow = Instance.new("Frame", card)
+                    statsRow.Size = UDim2.new(1,-8,0,18); statsRow.Position = UDim2.new(0,4,0,26)
+                    statsRow.BackgroundTransparency = 1; statsRow.ZIndex = 5
+
+                    local pingC = ping > 150 and neonPink or ping > 80 and neonYellow or Color3.fromRGB(80,220,120)
+                    local pingLbl = Instance.new("TextLabel", statsRow)
+                    pingLbl.Size = UDim2.new(0.5,0,1,0); pingLbl.BackgroundTransparency = 1
+                    pingLbl.Text = string.format("📶 %dms", ping)
+                    pingLbl.TextColor3 = pingC; pingLbl.TextSize = 11; pingLbl.Font = Enum.Font.GothamBold
+                    pingLbl.TextXAlignment = Enum.TextXAlignment.Left; pingLbl.ZIndex = 5
+
+                    local fpsC = fps < 30 and neonPink or fps < 50 and neonYellow or Color3.fromRGB(80,220,120)
+                    local fpsLbl = Instance.new("TextLabel", statsRow)
+                    fpsLbl.Size = UDim2.new(0.5,0,1,0); fpsLbl.Position = UDim2.new(0.5,0,0,0)
+                    fpsLbl.BackgroundTransparency = 1
+                    fpsLbl.Text = string.format("⚡ %d fps", fps)
+                    fpsLbl.TextColor3 = fpsC; fpsLbl.TextSize = 11; fpsLbl.Font = Enum.Font.GothamBold
+                    fpsLbl.TextXAlignment = Enum.TextXAlignment.Right; fpsLbl.ZIndex = 5
+
+                    local hopBtn = Instance.new("TextButton", card)
+                    hopBtn.Size = UDim2.new(1,-8,0,18); hopBtn.Position = UDim2.new(0,4,0,46)
+                    hopBtn.BackgroundColor3 = isMine and Color3.fromRGB(0,40,20)
+                        or isFull and Color3.fromRGB(30,10,10)
+                        or Color3.fromRGB(0,25,50)
+                    hopBtn.BorderSizePixel = 0
+                    hopBtn.Text = isMine and "✅  Server Ini" or isFull and "🔴  Penuh" or "🚀  Hop"
+                    hopBtn.TextColor3 = isMine and neonYellow or isFull and neonPink or Color3.fromRGB(255,255,255)
+                    hopBtn.TextSize = 11; hopBtn.Font = Enum.Font.GothamBold
+                    hopBtn.Active = not isFull and not isMine; hopBtn.ZIndex = 6
+                    Instance.new("UICorner", hopBtn).CornerRadius = UDim.new(0,4)
+
+                    if not isFull and not isMine then
+                        local serverId = tostring(srv.id or "")
+                        hopBtn.MouseButton1Click:Connect(function()
+                            hopBtn.Text = "⏳  Joining..."
+                            hopBtn.Active = false
+                            pcall(function()
+                                game:GetService("TeleportService"):TeleportToPlaceInstance(
+                                    game.PlaceId, serverId, player)
+                            end)
+                        end)
+                    end
+                end
+
+                slStatus.Text = string.format("● %d server aktif", #servers)
+                slStatus.TextColor3 = Color3.fromRGB(80,220,120)
+            end
+
+            local function fetchServerList()
+                if slFetching then return end
+                slFetching = true
+                slStatus.Text = "⏳ Memuat server..."
+                slStatus.TextColor3 = Color3.fromRGB(120,140,180)
+                slRefBtn.Text = "↻  Loading..."; slRefBtn.Active = false
+
+                task.spawn(function()
+                    local allServers = {}
+                    local cursor     = ""
+
+                    repeat
+                        local url = "https://games.roblox.com/v1/games/"
+                            .. tostring(game.PlaceId)
+                            .. "/servers/Public?sortOrder=Asc&limit=100"
+                        if cursor ~= "" then url = url .. "&cursor=" .. cursor end
+
+                        local ok, result = pcall(function() return game:HttpGet(url) end)
+                        if not ok or not result or result == "" then break end
+
+                        local okj, data = pcall(function()
+                            return game:GetService("HttpService"):JSONDecode(result)
+                        end)
+                        if not okj or type(data) ~= "table" or not data.data then break end
+
+                        for _, srv in ipairs(data.data) do
+                            table.insert(allServers, srv)
+                        end
+
+                        cursor = data.nextPageCursor or ""
+                        if cursor ~= "" then task.wait(0.6) end
+
+                    until cursor == "" or cursor == nil
+
+                    buildServerCards(allServers)
+                    slRefBtn.Text = "↻  Refresh"; slRefBtn.Active = true
+                    slFetching = false
+                end)
+            end
+
+            slRefBtn.MouseButton1Click:Connect(fetchServerList)
+            task.delay(2, fetchServerList)
+
+            local spW, spH = 8, boardH - 2
+            local spOff = boardWstd/2 + pillarW + spW/2 + 0.5
+            local spPart = Instance.new("Part")
+            spPart.Name = "LBSidePanel"
+            spPart.Size = Vector3.new(spW, spH, boardD)
+            spPart.CFrame = boardCF * CFrame.new(spOff, (boardH-spH)/2 - 1, 0)
+            spPart.Anchored = true; spPart.CanCollide = false
+            spPart.Material = Enum.Material.SmoothPlastic; spPart.Color = boardColor
+            spPart.Transparency = boardTransp; spPart.CastShadow = false; spPart.Parent = ws2
+            table.insert(boardParts, spPart)
+            local sp2 = spPart.CFrame
+            mkBorder(Vector3.new(spW+thick*2,thick*2,boardD+0.05), sp2*CFrame.new(0, spH/2,0), neonYellow)
+            mkBorder(Vector3.new(spW+thick*2,thick,  boardD+0.05), sp2*CFrame.new(0,-spH/2,0), neonPink)
+            mkBorder(Vector3.new(thick,spH,          boardD+0.05), sp2*CFrame.new(-spW/2,0,0), neonC)
+            mkBorder(Vector3.new(thick,spH,          boardD+0.05), sp2*CFrame.new( spW/2,0,0), neonC)
+
+            local spGui = Instance.new("SurfaceGui"); spGui.Name = "LBSidePanelGui"
+            spGui.Face = Enum.NormalId.Front
+            spGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+            spGui.PixelsPerStud = 40; spGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+            spGui.Parent = spPart; sidePanelGui = spGui
+            local spRoot = Instance.new("Frame", spGui)
+            spRoot.Size = UDim2.new(1,0,1,0); spRoot.BackgroundTransparency = 1; spRoot.BorderSizePixel = 0
+            local spHint = Instance.new("TextLabel", spRoot)
+            spHint.Size = UDim2.new(1,-10,1,0); spHint.Position = UDim2.new(0,5,0,0)
+            spHint.BackgroundTransparency = 1
+            spHint.Text = "Klik nama\npemain\nuntuk lihat\ndetail\nitem"
+            spHint.TextColor3 = Color3.fromRGB(100,120,160)
+            spHint.TextSize = 14; spHint.Font = Enum.Font.GothamBold
+            spHint.TextWrapped = true; spHint.TextXAlignment = Enum.TextXAlignment.Center; spHint.ZIndex = 3
+
+            local sGui = Instance.new("SurfaceGui"); sGui.Name = "LBMainGui"
+            sGui.Face = Enum.NormalId.Front
+            sGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+            sGui.PixelsPerStud = PPU; sGui.AlwaysOnTop = false
+            sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global; sGui.Parent = part
+
+            local root2 = Instance.new("Frame", sGui)
+            root2.Size = UDim2.new(1,0,1,0); root2.BackgroundTransparency = 1; root2.BorderSizePixel = 0
+
+            local hdr = Instance.new("Frame", root2)
+            hdr.Size = UDim2.new(1,0,0,HDR_H); hdr.BackgroundColor3 = Color3.fromRGB(5,5,20)
+            hdr.BorderSizePixel = 0; hdr.ZIndex = 5
+            local hGrad = Instance.new("UIGradient", hdr)
+            hGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0,   Color3.fromRGB(40,0,80)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,20,60)),
+                ColorSequenceKeypoint.new(1,   Color3.fromRGB(40,0,80)),
+            }); hGrad.Rotation = 90
+            local hLine = Instance.new("Frame", hdr)
+            hLine.Size = UDim2.new(1,0,0,3); hLine.Position = UDim2.new(0,0,1,-3)
+            hLine.BackgroundColor3 = neonC; hLine.BorderSizePixel = 0; hLine.ZIndex = 7
+            Instance.new("UIGradient", hLine).Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0,neonPink),
+                ColorSequenceKeypoint.new(0.5,neonC),
+                ColorSequenceKeypoint.new(1,neonPink),
+            })
+            local hIcon = Instance.new("TextLabel", hdr)
+            hIcon.Size = UDim2.new(0,50,0,50); hIcon.Position = UDim2.new(0,10,0.5,-25)
+            hIcon.BackgroundTransparency = 1; hIcon.Text = "🏆"; hIcon.TextSize = 36
+            hIcon.Font = Enum.Font.GothamBold; hIcon.ZIndex = 8
+            local hTitle = Instance.new("TextLabel", hdr)
+            hTitle.Size = UDim2.new(1,-70,1,0); hTitle.Position = UDim2.new(0,65,0,0)
+            hTitle.BackgroundTransparency = 1
+            hTitle.Text = "LEADERBOARD  ·  " .. #lbData .. " pemain"
+            hTitle.TextColor3 = neonC; hTitle.TextSize = 22
+            hTitle.Font = Enum.Font.GothamBold
+            hTitle.TextXAlignment = Enum.TextXAlignment.Left; hTitle.ZIndex = 8
+
+            local scroll = Instance.new("ScrollingFrame", root2)
+            scroll.Size = UDim2.new(1,0,1,-HDR_H)
+            scroll.Position = UDim2.new(0,0,0,HDR_H)
+            scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0
+            scroll.ScrollBarThickness = 8; scroll.ScrollBarImageColor3 = neonC
+            scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            scroll.CanvasSize = UDim2.new(0,0,0,0); scroll.ZIndex = 4
+
+            local listLayout = Instance.new("UIListLayout", scroll)
+            listLayout.FillDirection = Enum.FillDirection.Vertical
+            listLayout.Padding = UDim.new(0,6); listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            local pad = Instance.new("UIPadding", scroll)
+            pad.PaddingLeft = UDim.new(0,PAD); pad.PaddingTop = UDim.new(0,PAD)
+            pad.PaddingRight = UDim.new(0,PAD); pad.PaddingBottom = UDim.new(0,PAD)
+
+            for rank, udata in ipairs(lbData) do
+                local uname = udata.username or "?"
+                local wins   = udata.wins   or 0
+                local loses  = udata.loses  or 0
+                local tknW   = udata.tokensWin  or 0
+                local tknL   = udata.tokensLose or 0
+                local total  = wins + loses
+
+                local row = Instance.new("Frame", scroll)
+                row.Size = UDim2.new(1,0,0,110)
+                row.BackgroundColor3 = Color3.fromRGB(10,12,30)
+                row.BackgroundTransparency = 0.1; row.BorderSizePixel = 0
+                row.LayoutOrder = rank; row.ZIndex = 5
+                Instance.new("UICorner", row).CornerRadius = UDim.new(0,8)
+                local stroke = Instance.new("UIStroke", row)
+                stroke.Color = rank == 1 and neonYellow or rank == 2 and neonC or neonPink
+                stroke.Thickness = rank <= 3 and 2 or 1
+
+                local badge = Instance.new("TextLabel", row)
+                badge.Size = UDim2.new(0,60,1,0); badge.Position = UDim2.new(0,0,0,0)
+                badge.BackgroundTransparency = 1
+                badge.Text = rank <= 3 and ({"🥇","🥈","🥉"})[rank] or "#"..tostring(rank)
+                badge.TextColor3 = rank == 1 and neonYellow or rank == 2 and neonC or neonPink
+                badge.TextSize = rank <= 3 and 32 or 22
+                badge.Font = Enum.Font.GothamBold
+                badge.TextXAlignment = Enum.TextXAlignment.Center; badge.ZIndex = 6
+
+                local nameBtn = Instance.new("TextButton", row)
+                nameBtn.Size = UDim2.new(1,-130,0,40); nameBtn.Position = UDim2.new(0,64,0,8)
+                nameBtn.BackgroundColor3 = Color3.fromRGB(0,25,60)
+                nameBtn.BackgroundTransparency = 0.2; nameBtn.BorderSizePixel = 0
+                nameBtn.Text = maskUsername(uname)
+                nameBtn.TextColor3 = Color3.fromRGB(255,255,255)
+                nameBtn.TextSize = 18; nameBtn.Font = Enum.Font.GothamBold
+                nameBtn.TextTruncate = Enum.TextTruncate.AtEnd; nameBtn.ZIndex = 7
+                Instance.new("UICorner", nameBtn).CornerRadius = UDim.new(0,6)
+                local ns = Instance.new("UIStroke", nameBtn); ns.Color = neonC; ns.Thickness = 1.5
+                nameBtn.MouseButton1Click:Connect(function()
+                    showSidePanel(uname, udata)
+                end)
+
+                local stats = Instance.new("TextLabel", row)
+                stats.Size = UDim2.new(1,-70,0,32); stats.Position = UDim2.new(0,64,0,52)
+                stats.BackgroundTransparency = 1
+                stats.Text = string.format("W: %d   L: %d   |   Token: 🏅%d  💀%d   |   %d games",
+                    wins, loses, tknW, tknL, total)
+                stats.TextColor3 = Color3.fromRGB(200,220,255)
+                stats.TextSize = 14; stats.Font = Enum.Font.GothamBold
+                stats.TextXAlignment = Enum.TextXAlignment.Left; stats.ZIndex = 6
+
+                local winRate = total > 0 and (wins / total) or 0
+                local barColor = winRate >= 0.6 and neonC or winRate >= 0.4 and neonYellow or neonPink
+                local barBg = Instance.new("Frame", row)
+                barBg.Size = UDim2.new(1,-130,0,12); barBg.Position = UDim2.new(0,64,0,88)
+                barBg.BackgroundColor3 = Color3.fromRGB(30,10,10); barBg.BorderSizePixel = 0
+                barBg.ZIndex = 6; Instance.new("UICorner", barBg).CornerRadius = UDim.new(0,6)
+                local barFill = Instance.new("Frame", barBg)
+                barFill.Size = UDim2.new(winRate,0,1,0)
+                barFill.BackgroundColor3 = barColor; barFill.BorderSizePixel = 0; barFill.ZIndex = 7
+                Instance.new("UICorner", barFill).CornerRadius = UDim.new(0,6)
+
+                local wrTxt = Instance.new("TextLabel", row)
+                wrTxt.Size = UDim2.new(0,60,0,20); wrTxt.Position = UDim2.new(1,-65,0,86)
+                wrTxt.BackgroundTransparency = 1
+                wrTxt.Text = string.format("%.0f%%", winRate * 100)
+                wrTxt.TextColor3 = barColor
+                wrTxt.TextSize = 14; wrTxt.Font = Enum.Font.GothamBold
+                wrTxt.TextXAlignment = Enum.TextXAlignment.Right; wrTxt.ZIndex = 6
+            end
+
+            if #lbData == 0 then
+                local empty = Instance.new("TextLabel", scroll)
+                empty.Size = UDim2.new(1,0,0,60); empty.BackgroundTransparency = 1
+                empty.Text = "Belum ada data leaderboard"
+                empty.TextColor3 = Color3.fromRGB(100,120,150)
+                empty.TextSize = 14; empty.Font = Enum.Font.Gotham
+                empty.TextXAlignment = Enum.TextXAlignment.Center; empty.ZIndex = 5
+            end
+
+        end
+
+        buildBoard()
+        _G.__lbRefresh = buildBoard
+    end)
+end)
+
+-- ================================================
+-- VELOCITY X ZAKE - MODERNIZED GUI
+-- ================================================
+local player = game:GetService("Players").LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name           = "AutoMinigameUI"
+screenGui.Name         = "VelocityXZakeUI"
 screenGui.ResetOnSpawn   = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent         = playerGui
 
--- Panel — fixed size, bisa di-resize
+-- Main Panel
 local panel = Instance.new("Frame")
 panel.Name             = "Panel"
-panel.Size             = UDim2.new(0, 268, 0, 120)
+panel.Size             = UDim2.new(0, 268, 0, 320)
 panel.Position         = UDim2.new(0, 16, 0.5, -160)
-panel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+panel.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
 panel.BorderSizePixel  = 0
 panel.Active           = true
 panel.Draggable        = true
@@ -112,16 +937,16 @@ panel.ClipsDescendants = true
 panel.Parent           = screenGui
 
 do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,10); c.Parent = panel
-    local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(255, 0, 0); s.Thickness = 1.5; s.Parent = panel
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,12); c.Parent = panel
+    local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(100, 110, 255); s.Thickness = 2; s.Transparency = 0.5; s.Parent = panel
 end
 
--- ── Minimized Pill (tampil saat di-minimize) ──────
+-- ── Minimized Pill ──────
 local miniPill = Instance.new("TextButton")
 miniPill.Name             = "MiniPill"
-miniPill.Size             = UDim2.new(0, 148, 0, 34)
-miniPill.Position         = UDim2.new(0, 16, 0.5, -17)
-miniPill.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+miniPill.Size             = UDim2.new(0, 160, 0, 36)
+miniPill.Position         = UDim2.new(0, 16, 0.5, -18)
+miniPill.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
 miniPill.Text             = ""
 miniPill.AutoButtonColor  = false
 miniPill.BorderSizePixel  = 0
@@ -130,34 +955,35 @@ miniPill.Draggable        = true
 miniPill.Visible          = false
 miniPill.ZIndex           = 30
 miniPill.Parent           = screenGui
+
 do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,7); c.Parent = miniPill
-    local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(80,200,255); s.Thickness = 1.5; s.Parent = miniPill
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,18); c.Parent = miniPill
+    local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(100, 110, 255); s.Thickness = 2; s.Parent = miniPill
 end
 
 local miniIcon = Instance.new("TextLabel")
 miniIcon.Size               = UDim2.new(0,28,1,0)
-miniIcon.Position           = UDim2.new(0,8,0,0)
+miniIcon.Position           = UDim2.new(0,10,0,0)
 miniIcon.BackgroundTransparency = 1
-miniIcon.Text               = ""
-miniIcon.TextSize           = 16
-miniIcon.Font               = Enum.Font.Gotham
-miniIcon.ZIndex             = 31
-miniIcon.Parent             = miniPill
+miniIcon.Text               = "⚡"
+miniIcon.TextSize               = 16
+miniIcon.Font               = Enum.Font.GothamBold
+miniIcon.TextColor3         = Color3.fromRGB(100, 110, 255)
+miniIcon.ZIndex               = 31
+miniIcon.Parent               = miniPill
 
 local miniText = Instance.new("TextLabel")
-miniText.Size               = UDim2.new(1,-40,1,0)
-miniText.Position           = UDim2.new(0,34,0,0)
+miniText.Size               = UDim2.new(1,-45,1,0)
+miniText.Position           = UDim2.new(0,38,0,0)
 miniText.BackgroundTransparency = 1
 miniText.Text               = "Velocity x Zake"
-miniText.TextColor3         = Color3.fromRGB(255, 0, 0)
-miniText.TextSize           = 13
+miniText.TextColor3         = Color3.fromRGB(255, 255, 255)
+miniText.TextSize               = 12
 miniText.Font               = Enum.Font.GothamBold
-miniText.TextXAlignment     = Enum.TextXAlignment.Left
-miniText.ZIndex             = 31
-miniText.Parent             = miniPill
+miniText.TextXAlignment       = Enum.TextXAlignment.Left
+miniText.ZIndex               = 31
+miniText.Parent               = miniPill
 
--- Klik pill → restore panel
 miniPill.MouseButton1Click:Connect(function()
     miniPill.Visible = false
     panel.Visible    = true
@@ -165,49 +991,70 @@ end)
 
 -- Header
 local header = Instance.new("Frame")
-header.Size             = UDim2.new(1,0,0,40)
-header.BackgroundColor3 = Color3.fromRGB(25,25,35)
+header.Size             = UDim2.new(1,0,0,45)
+header.BackgroundColor3 = Color3.fromRGB(20,20,25)
 header.BorderSizePixel  = 0
 header.Parent           = panel
 
 do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,10); c.Parent = header
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,12); c.Parent = header
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,0,0,12); f.Position = UDim2.new(0,0,1,-12)
-    f.BackgroundColor3 = Color3.fromRGB(25,25,35); f.BorderSizePixel = 0; f.Parent = header
+    f.Size = UDim2.new(1,0,0,15); f.Position = UDim2.new(0,0,1,-15)
+    f.BackgroundColor3 = Color3.fromRGB(20,20,25); f.BorderSizePixel = 0; f.Parent = header
 end
 
 -- Title
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size               = UDim2.new(1,-72,1,0)
-titleLabel.Position           = UDim2.new(0,10,0,0)
+titleLabel.Position           = UDim2.new(0,15,0,0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text               = "Velocity x Zake"
-titleLabel.TextColor3         = Color3.fromRGB(255, 0, 0)
-titleLabel.TextSize           = 13
+titleLabel.Text               = "Velocity x Zake | Plaza"
+titleLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize               = 13
 titleLabel.Font               = Enum.Font.GothamBold
-titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
-titleLabel.Parent             = header
+titleLabel.TextXAlignment       = Enum.TextXAlignment.Left
+titleLabel.Parent               = header
 
--- Close Button (X pakai ImageLabel agar tidak jadi kotak)
+-- Minimize Button
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size             = UDim2.new(0,28,0,28)
+minimizeBtn.Position         = UDim2.new(1,-68,0.5,-14)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(30,30,40)
+minimizeBtn.Text             = "—"
+minimizeBtn.TextColor3       = Color3.fromRGB(200,200,200)
+minimizeBtn.TextSize         = 14
+minimizeBtn.Font             = Enum.Font.GothamBold
+minimizeBtn.AutoButtonColor  = false
+minimizeBtn.BorderSizePixel  = 0
+minimizeBtn.ZIndex           = 5
+minimizeBtn.Parent           = header
+do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,8); c.Parent = minimizeBtn end
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    local panelPos = panel.AbsolutePosition
+    miniPill.Position = UDim2.new(0, panelPos.X, 0, panelPos.Y + 4)
+    panel.Visible    = false
+    miniPill.Visible = true
+end)
+
+-- Close Button
 local closeBtn = Instance.new("TextButton")
-closeBtn.Size             = UDim2.new(0,26,0,26)
-closeBtn.Position         = UDim2.new(1,-32,0.5,-13)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180,50,50)
+closeBtn.Size             = UDim2.new(0,28,0,28)
+closeBtn.Position         = UDim2.new(1,-34,0.5,-14)
+closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
 closeBtn.Text             = ""
 closeBtn.AutoButtonColor  = false
 closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 5
 closeBtn.Parent           = header
-do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = closeBtn end
+do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,8); c.Parent = closeBtn end
 
--- X dibuat dari dua garis (Frame) agar pasti kerender
 do
     local function mkLine(rot)
         local l = Instance.new("Frame")
         l.Size             = UDim2.new(0,14,0,2)
         l.Position         = UDim2.new(0.5,-7,0.5,-1)
-        l.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        l.BackgroundColor3 = Color3.fromRGB(255,255,255)
         l.BorderSizePixel  = 0
         l.Rotation         = rot
         l.ZIndex           = 6
@@ -218,61 +1065,58 @@ do
     mkLine(-45)
 end
 
-closeBtn.MouseEnter:Connect(function() closeBtn.BackgroundColor3 = Color3.fromRGB(220,60,60) end)
-closeBtn.MouseLeave:Connect(function() closeBtn.BackgroundColor3 = Color3.fromRGB(180,50,50) end)
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
 
 -- ── Scroll Body ───────────────────────────────────
--- Isi panel ada di sini, bisa di-scroll
 local scrollBody = Instance.new("ScrollingFrame")
 scrollBody.Name                 = "ScrollBody"
-scrollBody.Position             = UDim2.new(0, 0, 0, 40)     -- di bawah header
-scrollBody.Size                 = UDim2.new(1, 0, 1, -52)    -- sisakan 12px untuk resize handle
+scrollBody.Position             = UDim2.new(0, 0, 0, 45)
+scrollBody.Size                 = UDim2.new(1, 0, 1, -57)
 scrollBody.BackgroundTransparency = 1
 scrollBody.BorderSizePixel      = 0
-scrollBody.ScrollBarThickness   = 4
-scrollBody.ScrollBarImageColor3 = Color3.fromRGB(80,200,255)
-scrollBody.CanvasSize           = UDim2.new(0, 0, 0, 0)      -- di-update otomatis
+scrollBody.ScrollBarThickness   = 2
+scrollBody.ScrollBarImageColor3 = Color3.fromRGB(100, 110, 255)
+scrollBody.CanvasSize           = UDim2.new(0, 0, 0, 0)
 scrollBody.AutomaticCanvasSize  = Enum.AutomaticSize.Y
-scrollBody.Parent               = panel
+scrollBody.Parent                = panel
 
 do
     local l = Instance.new("UIListLayout")
-    l.Padding = UDim.new(0,8)
+    l.Padding = UDim.new(0,10)
     l.HorizontalAlignment = Enum.HorizontalAlignment.Center
     l.SortOrder = Enum.SortOrder.LayoutOrder
     l.Parent = scrollBody
 
     local p = Instance.new("UIPadding")
-    p.PaddingTop    = UDim.new(0,10)
-    p.PaddingLeft   = UDim.new(0,10)
-    p.PaddingRight  = UDim.new(0,10)
-    p.PaddingBottom = UDim.new(0,10)
+    p.PaddingTop    = UDim.new(0,15)
+    p.PaddingLeft   = UDim.new(0,12)
+    p.PaddingRight  = UDim.new(0,12)
+    p.PaddingBottom = UDim.new(0,15)
     p.Parent        = scrollBody
 end
 
--- ── Resize Handle (pojok kanan bawah) ─────────────
+-- ── Resize Handle ─────────────
 local resizeHandle = Instance.new("TextButton")
 resizeHandle.Name             = "ResizeHandle"
-resizeHandle.Size             = UDim2.new(0, 20, 0, 12)
-resizeHandle.Position         = UDim2.new(1, -20, 1, -12)
-resizeHandle.BackgroundColor3 = Color3.fromRGB(60,70,90)
+resizeHandle.Size             = UDim2.new(0, 24, 0, 14)
+resizeHandle.Position         = UDim2.new(1, -24, 1, -14)
+resizeHandle.BackgroundColor3 = Color3.fromRGB(30,30,40)
 resizeHandle.Text             = "⠿"
-resizeHandle.TextColor3       = Color3.fromRGB(100,140,180)
-resizeHandle.TextSize         = 10
+resizeHandle.TextColor3       = Color3.fromRGB(100, 110, 255)
+resizeHandle.TextSize         = 12
 resizeHandle.Font             = Enum.Font.Gotham
 resizeHandle.AutoButtonColor  = false
 resizeHandle.BorderSizePixel  = 0
 resizeHandle.ZIndex           = 6
 resizeHandle.Parent           = panel
 do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,4); c.Parent = resizeHandle end
-resizeHandle.MouseEnter:Connect(function() resizeHandle.BackgroundColor3 = Color3.fromRGB(80,100,130) end)
-resizeHandle.MouseLeave:Connect(function() resizeHandle.BackgroundColor3 = Color3.fromRGB(60,70,90) end)
 
--- Logika resize drag
 local resizing        = false
 local resizeStartMouse = Vector2.new()
 local resizeStartSize  = Vector2.new()
-local MIN_W, MAX_W    = 220, 600
+local MIN_W, MAX_W    = 240, 600
 local MIN_H, MAX_H    = 200, 800
 
 resizeHandle.MouseButton1Down:Connect(function()
@@ -296,56 +1140,64 @@ UserInputService.InputEnded:Connect(function(inp)
     end
 end)
 
--- Helper: section label (parent ke scrollBody)
+-- Helpers
 local function makeLabel(text)
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,0,0,16); l.BackgroundTransparency = 1
-    l.Text = text; l.TextColor3 = Color3.fromRGB(140,160,180)
-    l.TextSize = 11; l.Font = Enum.Font.Gotham
+    l.Size = UDim2.new(1,0,0,18); l.BackgroundTransparency = 1
+    l.Text = text:upper(); l.TextColor3 = Color3.fromRGB(100, 110, 130)
+    l.TextSize = 10; l.Font = Enum.Font.GothamBold; l.TextLetterSpacing = 1
     l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = scrollBody
     return l
 end
 
--- Helper: toggle row (parent ke scrollBody)
 local function makeToggleRow(labelText)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1,0,0,32); row.BackgroundColor3 = Color3.fromRGB(25,25,35)
+    row.Size = UDim2.new(1,0,0,36); row.BackgroundColor3 = Color3.fromRGB(20,20,28)
     row.BorderSizePixel = 0; row.Parent = scrollBody
-    do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,7); c.Parent = row end
+    do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,8); c.Parent = row end
 
     local txt = Instance.new("TextLabel")
-    txt.Size = UDim2.new(1,-50,1,0); txt.Position = UDim2.new(0,10,0,0)
+    txt.Size = UDim2.new(1,-60,1,0); txt.Position = UDim2.new(0,12,0,0)
     txt.BackgroundTransparency = 1; txt.Text = labelText
-    txt.TextColor3 = Color3.fromRGB(200,210,220); txt.TextSize = 12
-    txt.Font = Enum.Font.Gotham; txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.TextColor3 = Color3.fromRGB(230,230,240); txt.TextSize = 12
+    txt.Font = Enum.Font.GothamMedium; txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.Parent = row
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0,42,0,22); btn.Position = UDim2.new(1,-48,0.5,-11)
-    btn.BackgroundColor3 = Color3.fromRGB(60,60,70)
+    btn.Size = UDim2.new(0,44,0,22); btn.Position = UDim2.new(1,-52,0.5,-11)
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,50)
     btn.Text = ""; btn.AutoButtonColor = false; btn.Parent = row
     do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = btn end
 
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0,16,0,16); knob.Position = UDim2.new(0,3,0.5,-8)
-    knob.BackgroundColor3 = Color3.fromRGB(120,130,140); knob.BorderSizePixel = 0; knob.Parent = btn
+    knob.BackgroundColor3 = Color3.fromRGB(150,150,160); knob.BorderSizePixel = 0; knob.Parent = btn
     do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = knob end
 
     return row, btn, knob
 end
 
 local function setToggleVisual(btn, knob, on)
-    btn.BackgroundColor3  = on and Color3.fromRGB(30,160,100) or Color3.fromRGB(60,60,70)
-    knob.Position         = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
-    knob.BackgroundColor3 = on and Color3.fromRGB(220,255,235) or Color3.fromRGB(120,130,140)
+    btn.BackgroundColor3  = on and Color3.fromRGB(100, 110, 255) or Color3.fromRGB(40,40,50)
+    knob.Position          = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
+    knob.BackgroundColor3 = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,160)
 end
+
+-- Example Content
+makeLabel("Automation Settings")
+local r1, b1, k1 = makeToggleRow("Auto Minigame")
+local enabled = false
+b1.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    setToggleVisual(b1, k1, enabled)
+end)
 
 -- ================================================
 -- SECTION: Auto Timing Ring  ← PALING ATAS
 -- ================================================
 local autoTimingLabel = makeLabel("Auto Timing Ring")
 autoTimingLabel.Visible = false   -- HIDDEN
-local _, timingToggleBtn, timingToggleKnob = makeToggleRow("Auto Popcorn")
+local _, timingToggleBtn, timingToggleKnob = makeToggleRow("Aktifkan Auto Hit Ring")
 -- Default ON
 setToggleVisual(timingToggleBtn, timingToggleKnob, true)
 
@@ -378,9 +1230,10 @@ local tModeVal      = makeInfoRow(timingInfoBox, "Mode",      86)
 
 -- Forward-declare agar bisa diakses dari dalam preset click handler
 local targetScaleBox, timingOffsetBox
+
 -- Preset Buttons: Perfect / Great / Good
 local presetRow = Instance.new("Frame")
-presetRow.Size                = UDim2.new(1,0,0,40)
+presetRow.Size                = UDim2.new(1,0,0,32)
 presetRow.BackgroundTransparency = 1
 presetRow.BorderSizePixel     = 0
 presetRow.Parent              = scrollBody
@@ -393,70 +1246,35 @@ do
     layout.VerticalAlignment   = Enum.VerticalAlignment.Center
     layout.Parent              = presetRow
 
-    local PRESETS = {}
+    local PRESETS = {
+        { label = "Perfect",    scale = 0.53, offset = 0.02,    color = Color3.fromRGB(80,220,140)  },
+        { label = "Perfect v2", scale = 0.53, offset = 0.3,     color = Color3.fromRGB(55,200,255)  },
+        { label = "Great",      scale = 0.58, offset = 0.03994, color = Color3.fromRGB(240,195,55)  },
+        { label = "Good",       scale = 0.62, offset = 0.03994, color = Color3.fromRGB(220,125,55)  },
+    }
 
     for _, preset in ipairs(PRESETS) do
         local btn = Instance.new("TextButton")
-        btn.Size             = UDim2.new(0, 65, 0, 34)
-        btn.BackgroundColor3 = preset.color
+        btn.Size             = UDim2.new(0,54,0,30)
+        btn.BackgroundColor3 = Color3.fromRGB(28,28,42)
         btn.Text             = preset.label
-        btn.TextColor3       = Color3.fromRGB(255, 255, 255)
-        btn.TextSize         = 15
-        btn.Font             = Enum.Font.Gotham
+        btn.TextColor3       = preset.color
+        btn.TextSize         = 10
+        btn.Font             = Enum.Font.GothamBold
         btn.AutoButtonColor  = false
         btn.BorderSizePixel  = 0
         btn.Parent           = presetRow
-        
-        do
-            local c = Instance.new("UICorner")
-            c.CornerRadius = UDim.new(0, 8)
-            c.Parent = btn
-            
-            local s = Instance.new("UIStroke")
-            s.Color = Color3.fromRGB(255, 255, 255)
-            s.Thickness = 1.5
-            s.Parent = btn
-        end
-        
-        btn.MouseEnter:Connect(function()
-            btn.BackgroundColor3 = Color3.new(
-                preset.color.R * 1.2,
-                preset.color.G * 1.2,
-                preset.color.B * 1.2
-            )
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end)
-        
-        btn.MouseLeave:Connect(function()
-            btn.BackgroundColor3 = preset.color
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end)
-        
-        btn.MouseButton1Down:Connect(function()
-            btn.BackgroundColor3 = Color3.new(
-                preset.color.R * 0.8,
-                preset.color.G * 0.8,
-                preset.color.B * 0.8
-            )
-        end)
-        
-        btn.MouseButton1Up:Connect(function()
-            btn.BackgroundColor3 = Color3.new(
-                preset.color.R * 1.2,
-                preset.color.G * 1.2,
-                preset.color.B * 1.2
-            )
-        end)
-        
+        do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,7); c.Parent = btn end
+        do local s = Instance.new("UIStroke"); s.Color = preset.color; s.Thickness = 1; s.Parent = btn end
+        btn.MouseEnter:Connect(function()  btn.BackgroundColor3 = Color3.fromRGB(40,40,62) end)
+        btn.MouseLeave:Connect(function()  btn.BackgroundColor3 = Color3.fromRGB(28,28,42) end)
         btn.MouseButton1Click:Connect(function()
             -- Update CONFIG
             CONFIG.TARGET_SCALE  = preset.scale
             CONFIG.TIMING_OFFSET = preset.offset
-            
             -- Update TextBox values (supaya keliatan berubah di UI)
             if targetScaleBox  then targetScaleBox.Text  = tostring(preset.scale)  end
             if timingOffsetBox then timingOffsetBox.Text = tostring(preset.offset) end
-            
             -- Update label Mode
             tModeVal.Text       = preset.label
             tModeVal.TextColor3 = preset.color
@@ -977,8 +1795,6 @@ startBtn.TextSize = 13; startBtn.Font = Enum.Font.GothamBold
 startBtn.AutoButtonColor = false; startBtn.BorderSizePixel = 0; startBtn.Parent = scrollBody
 startBtn.Visible = false   -- HIDDEN
 do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,8); c.Parent = startBtn end
-startBtn.MouseEnter:Connect(function() startBtn.BackgroundColor3 = Color3.fromRGB(50,200,130) end)
-startBtn.MouseLeave:Connect(function() startBtn.BackgroundColor3 = Color3.fromRGB(30,160,100) end)
 
 -- ================================================
 -- DROPDOWN LIST
@@ -1009,7 +1825,7 @@ local scriptActive  = true
 -- warna overlay
 local COLOR_NORMAL    = Color3.fromRGB(80, 200, 255)
 local COLOR_HIGHLIGHT = Color3.fromRGB(255, 210, 50)
-local BG_NORMAL       = Color3.fromRGB(0, 0, 0)
+local BG_NORMAL       = Color3.fromRGB(15, 15, 20)
 local BG_HIGHLIGHT    = Color3.fromRGB(60, 45, 5)
 
 -- ================================================
@@ -2031,6 +2847,82 @@ closeBtn.MouseButton1Click:Connect(function()
 
     screenGui:Destroy()
 end)
+
+-- ================================================
+-- FPS & PING DISPLAY  (lightweight)
+-- ================================================
+do
+    local RS = game:GetService("RunService")
+
+    local fpsPing = Instance.new("ScreenGui")
+    fpsPing.Name           = "FpsPingUI"
+    fpsPing.ResetOnSpawn   = false
+    fpsPing.DisplayOrder   = 999
+    fpsPing.Parent         = playerGui
+
+    local label = Instance.new("TextLabel")
+    label.Size                  = UDim2.new(0, 120, 0, 28)
+    label.Position              = UDim2.new(1, -128, 0, 6)
+    label.BackgroundColor3      = Color3.fromRGB(12, 12, 18)
+    label.BackgroundTransparency = 0.25
+    label.BorderSizePixel       = 0
+    label.Text                  = "FPS: --  Ping: --"
+    label.TextColor3            = Color3.fromRGB(80, 200, 255)
+    label.TextSize              = 11
+    label.Font                  = Enum.Font.GothamBold
+    label.TextXAlignment        = Enum.TextXAlignment.Center
+    label.ZIndex                = 10
+    label.Parent                = fpsPing
+    do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,7); c.Parent = label end
+
+    -- Hitung FPS dari delta time tiap frame
+    local fpsBuffer = {}
+    local lastPing  = 0
+    local pingTimer = 0
+
+    -- ── Ping via GetNetworkPing — universal, jalan di semua executor ──
+
+
+    RS.Heartbeat:Connect(function(dt)
+        -- FPS: rata-rata dari 10 frame terakhir
+        table.insert(fpsBuffer, 1 / dt)
+        if #fpsBuffer > 10 then table.remove(fpsBuffer, 1) end
+
+        -- Update display tiap ~0.5 detik
+        pingTimer = pingTimer + dt
+        if pingTimer < 0.5 then return end
+        pingTimer = 0
+
+        -- Hitung avg FPS
+        local sum = 0
+        for _, v in ipairs(fpsBuffer) do sum = sum + v end
+        local fps = math.round(sum / #fpsBuffer)
+
+        -- Ping via GetNetworkPing (universal, no hook needed)
+        local ping = 0
+        pcall(function()
+            ping = math.round(player:GetNetworkPing() * 1000)
+        end)
+        if ping <= 0 then
+            pcall(function()
+                ping = math.round(game:GetService("Stats").Network.ServerStatsItem["Data Ping"].Value)
+            end)
+        end
+        lastPing = ping
+
+        -- Warna ping: hijau <80ms, kuning <150ms, merah >= 150ms
+        local pingColor =
+            lastPing < 80  and Color3.fromRGB(80, 255, 140) or
+            lastPing < 150 and Color3.fromRGB(255, 200, 60)  or
+            Color3.fromRGB(255, 80, 80)
+
+        label.Text = string.format("FPS: %d  Ping: %dms", fps, lastPing)
+        label.TextColor3 =
+            fps < 30 and Color3.fromRGB(255, 80, 80)  or
+            fps < 50 and Color3.fromRGB(255, 200, 60) or
+            pingColor
+    end)
+end
 
 -- ================================================
 -- FAKE CONSOLE LOOP

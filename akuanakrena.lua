@@ -9,9 +9,6 @@ if PlaceId == 131623223084840 then
         if humanoid and backpack then
             for _, tool in ipairs(backpack:GetChildren()) do
                 if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                    -- Check the Scale attribute
-                    local scale = tool:GetAttribute("Scale")
-                    if scale and scale > 0.8 and scale < 1.2 then
                         humanoid:EquipTool(tool)
                         break
                     end

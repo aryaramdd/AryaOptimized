@@ -1,38 +1,32 @@
-if tostring(game.PlaceId) == "131623223084840" then
+local PlaceId = game.PlaceId
+if PlaceId == 131623223084840 then
     local function equipAnububu()
-        local Players = game:GetService("Players")
-        local player = Players.LocalPlayer
-        
-        -- Tunggu player ready
-        if not player then
-            player = Players.PlayerAdded:Wait()
-        end
-
+        local player = game.Players.LocalPlayer
         local char = player.Character or player.CharacterAdded:Wait()
-        local humanoid = char:WaitForChild("Humanoid", 10)
-        local backpack = player:WaitForChild("Backpack", 10)
-
-        if not humanoid then warn("Humanoid nil!") return end
-        if not backpack then warn("Backpack nil!") return end
-
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                humanoid:EquipTool(tool)
-                print("Anububu equipped:", tool.Name)
-                break
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        
+        if humanoid and backpack then
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
+                        humanoid:EquipTool(tool)
+                        break
+                    end
+                end
             end
         end
-
+        
         task.wait(0.1)
-
+        
+        local Event = game:GetService("ReplicatedStorage").Shared.Remotes.Networking["RE/ArenaPortal/ArenaQueueJoin"]
         pcall(function()
-            local Event = game:GetService("ReplicatedStorage").Shared.Remotes.Networking["RE/ArenaPortal/ArenaQueueJoin"]
             Event:FireServer("TsunamiArena_FFA_8")
         end)
     end
-
+    
     equipAnububu()
-end
+    return 
+endd
 
 -- Infinity filter
 local INFINITY_NAMES = {

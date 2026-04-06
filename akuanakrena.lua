@@ -1,35 +1,37 @@
 local PlaceId = game.PlaceId
 if PlaceId == 131623223084840 then
     local function equipAnububu()
-        local player = game.Players.LocalPlayer
-        local char = player.Character or player.CharacterAdded:Wait()
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        
-        if humanoid and backpack then
-            for _, tool in ipairs(backpack:GetChildren()) do
-                if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                    -- Check the Scale attribute
-                    local scale = tool:GetAttribute("Scale")
-                    if scale and scale > 0.8 and scale < 1.2 then
-                        humanoid:EquipTool(tool)
-                        break
-                    end
-                end
+    local player = game.Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local backpack = player:WaitForChild("Backpack")
+    
+    task.wait(3)
+    
+    if humanoid and backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
+                humanoid:EquipTool(tool)
+                break
             end
         end
-        
-        task.wait(0.1)
-        
-        local Event = game:GetService("ReplicatedStorage").Shared.Remotes.Networking["RE/ArenaPortal/ArenaQueueJoin"]
-        pcall(function()
-            Event:FireServer("TsunamiArena_FFA_8")
-        end)
     end
     
-    equipAnububu()
-    return 
+    task.wait(0.1)
+    
+    local Event = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+        :WaitForChild("Remotes")
+        :WaitForChild("Networking")
+        :WaitForChild("RE/ArenaPortal/ArenaQueueJoin")
+    
+    pcall(function()
+        Event:FireServer("TsunamiArena_FFA_8")
+    end)
 end
+
+task.wait(2)
+equipAnububu()
+return
 
 -- Infinity filter
 local INFINITY_NAMES = {

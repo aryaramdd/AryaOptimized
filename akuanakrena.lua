@@ -3,30 +3,67 @@ if PlaceId == 131623223084840 then
     local function equipAnububu()
         local player = game.Players.LocalPlayer
         local char = player.Character or player.CharacterAdded:Wait()
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local backpack = player:FindFirstChildOfClass("Backpack")
+        local humanoid = char:WaitForChild("Humanoid")
+        local backpack = player:WaitForChild("Backpack")
         
-        if humanoid and backpack then
-            for _, tool in ipairs(backpack:GetChildren()) do
-                if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                        humanoid:EquipTool(tool)
-                        break
-                    end
+        print("Memulai pemindaian tas...")
+        task.wait(3) -- Memberi waktu item untuk masuk ke tas
+        
+        local foundTool = nil
+        
+        -- Ambil semua item di tas
+        local items = backpack:GetChildren()
+        
+        for _, tool in ipairs(items) do
+            -- Kita cek apakah objek ini adalah Tool
+            if tool:IsA("Tool") then
+                -- Cek Attribute 'BrainrotName' apakah isinya 'Anububu'
+                if tool:GetAttribute("BrainrotName") == "Anububu" then
+                    foundTool = tool
+                    break
                 end
             end
         end
         
-        task.wait(0.1)
-        
-        local Event = game:GetService("ReplicatedStorage").Shared.Remotes.Networking["RE/ArenaPortal/ArenaQueueJoin"]
-        pcall(function()
-            Event:FireServer("TsunamiArena_FFA_8")
-        end)
+        -- Jika tidak ketemu di Backpack, cek di tangan (Character)
+        if not foundTool then
+            for _, tool in ipairs(char:GetChildren()) do
+                if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
+                    foundTool = tool
+                    break
+                end
+            end
+        end
+
+        if foundTool then
+            print("Anububu ditemukan! (ID: " .. foundTool.Name .. ")")
+            humanoid:EquipTool(foundTool)
+            
+            task.wait(0.5) -- Jeda sebentar setelah equip
+            
+            local remotePath = game:GetService("ReplicatedStorage")
+                :WaitForChild("Shared")
+                :WaitForChild("Remotes")
+                :WaitForChild("Networking")
+                :WaitForChild("RE/ArenaPortal/ArenaQueueJoin")
+            
+            local success, err = pcall(function()
+                remotePath:FireServer("TsunamiArena_FFA_8")
+            end)
+            
+            if success then
+                print("Berhasil join arena!")
+            else
+                warn("Gagal kirim remote: " .. err)
+            end
+        else
+            warn("Gagal: Item Anububu tidak ditemukan meskipun tas sudah discan.")
+        end
     end
-    
+
+    task.wait(2)
     equipAnububu()
-    return 
-endd
+end
 
 -- Infinity filter
 local INFINITY_NAMES = {

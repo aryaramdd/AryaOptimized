@@ -1,31 +1,37 @@
-local PlaceId = game.PlaceId
-if PlaceId == 131623223084840 then
+if tostring(game.PlaceId) == "131623223084840" then
     local function equipAnububu()
-        local player = game.Players.LocalPlayer
-        local char = player.Character or player.CharacterAdded:Wait()
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local backpack = player:FindFirstChildOfClass("Backpack")
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
         
-        if humanoid and backpack then
-            for _, tool in ipairs(backpack:GetChildren()) do
-                if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                        humanoid:EquipTool(tool)
-                        break
-                    end
-                end
+        -- Tunggu player ready
+        if not player then
+            player = Players.PlayerAdded:Wait()
+        end
+
+        local char = player.Character or player.CharacterAdded:Wait()
+        local humanoid = char:WaitForChild("Humanoid", 10)
+        local backpack = player:WaitForChild("Backpack", 10)
+
+        if not humanoid then warn("Humanoid nil!") return end
+        if not backpack then warn("Backpack nil!") return end
+
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
+                humanoid:EquipTool(tool)
+                print("Anububu equipped:", tool.Name)
+                break
             end
         end
-        
+
         task.wait(0.1)
-        
-        local args = {
-"TsunamiArena_FFA_8"
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Remotes"):WaitForChild("Networking"):WaitForChild("RE/ArenaPortal/ArenaQueueJoin"):FireServer(unpack(args))
+
+        pcall(function()
+            local Event = game:GetService("ReplicatedStorage").Shared.Remotes.Networking["RE/ArenaPortal/ArenaQueueJoin"]
+            Event:FireServer("TsunamiArena_FFA_8")
+        end)
     end
-    
+
     equipAnububu()
-    return 
 end
 
 -- Infinity filter

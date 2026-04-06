@@ -1,60 +1,35 @@
 local PlaceId = game.PlaceId
-
--- Tambahkan pengecekan Place ID di awal
 if PlaceId == 131623223084840 then
-    
     local function equipAnububu()
         local player = game.Players.LocalPlayer
         local char = player.Character or player.CharacterAdded:Wait()
-        local humanoid = char:WaitForChild("Humanoid")
-        local backpack = player:WaitForChild("Backpack")
-        
-        task.wait(3) -- Menunggu loading karakter/item
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local backpack = player:FindFirstChildOfClass("Backpack")
         
         if humanoid and backpack then
-            local foundTool = nil
-            
-            -- Mencari tool berdasarkan Attribute
             for _, tool in ipairs(backpack:GetChildren()) do
                 if tool:IsA("Tool") and tool:GetAttribute("BrainrotName") == "Anububu" then
-                    foundTool = tool
-                    humanoid:EquipTool(tool)
-                    print("Anububu berhasil di-equip!")
-                    break
+                    -- Check the Scale attribute
+                    local scale = tool:GetAttribute("Scale")
+                    if scale and scale > 0.8 and scale < 1.2 then
+                        humanoid:EquipTool(tool)
+                        break
+                    end
                 end
-            end
-            
-            -- Jika ketemu, baru jalankan Remote
-            if foundTool then
-                task.wait(0.1)
-                
-                local remotePath = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Shared")
-                    :WaitForChild("Remotes")
-                    :WaitForChild("Networking")
-                    :WaitForChild("RE/ArenaPortal/ArenaQueueJoin")
-                
-                local success, err = pcall(function()
-                    -- Menambahkan argumen "TsunamiArena_FFA_8" sesuai permintaanmu
-                    remotePath:FireServer("TsunamiArena_FFA_8")
-                end)
-                
-                if success then
-                    print("Berhasil mengirim perintah Join Arena.")
-                else
-                    warn("Gagal mengirim Remote: " .. err)
-                end
-            else
-                warn("Tool dengan Attribute Anububu tidak ditemukan di Backpack.")
             end
         end
+        
+        task.wait(0.1)
+        
+        local args = {
+"TsunamiArena_FFA_8"
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Remotes"):WaitForChild("Networking"):WaitForChild("RE/ArenaPortal/ArenaQueueJoin"):FireServer(unpack(args))
     end
-
-    -- Menjalankan fungsi setelah 2 detik
-    task.wait(2)
+    
     equipAnububu()
-
-end -- Penutup if PlaceIdturn
+    return 
+end
 
 -- Infinity filter
 local INFINITY_NAMES = {

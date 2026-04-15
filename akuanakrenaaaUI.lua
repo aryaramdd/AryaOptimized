@@ -4951,32 +4951,36 @@ function Library:Create(options)
 				ConnectionBin,
 				UserInputService.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and Tab.Hover then
-								Length = 0.3,
-								Goal = { Position = UDim2.new(0, 0, 0, 452) },
-							})
+    Library:PlaySound(LibSettings.ClickSound)
+    
+    if Gui.Hidden then
+        Library:Tween(Gui["3"], {
+            Length = 0.3,
+            Goal = { Position = UDim2.new(0, 0, 0, 452) },
+        })
 
-							Library:Tween(Gui["18"], {
-								Length = 0.3,
-								Goal = { Size = UDim2.new(0, 498, 0, 0) },
-							})
+        Library:Tween(Gui["18"], {
+            Length = 0.3,
+            Goal = { Size = UDim2.new(0, 498, 0, 0) },
+        })
 
-							Gui.Hidden = true
-						else
-							Library:Tween(Gui["18"], {
-								Length = 0.3,
-								Goal = { Position = UDim2.new(0, 0, 0, 0) },
-							})
+        Gui.Hidden = true
+    else
+        Library:Tween(Gui["18"], {
+            Length = 0.3,
+            Goal = { Position = UDim2.new(0, 0, 0, 0) },
+        })
 
-							Library:Tween(Gui["18"], {
-								Length = 0.3,
-								Goal = { Size = UDim2.new(0, 498, 0, 452) },
-							})
+        Library:Tween(Gui["18"], {
+            Length = 0.3,
+            Goal = { Size = UDim2.new(0, 498, 0, 452) },
+        })
 
-							Gui.Hidden = false
-						end
+        Gui.Hidden = false
+    end
 
-						Tab:Activate()
-					end
+    Tab:Activate()
+end
 				end)
 			)
 
